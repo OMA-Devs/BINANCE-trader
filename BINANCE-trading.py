@@ -137,7 +137,7 @@ def getFULLHistoricPair(symbol):
 def trader(sym, lim, sto):
 	Log = logging.getLogger("TradeLog")
 	Log.setLevel(logging.DEBUG)
-	fh = logging.FileHandler(sym+"-"+str(datetime.now().date())+".log")
+	fh = logging.FileHandler(sym+"-"+str(datetime.now().date())+str(lim)+".log")
 	fh.setLevel(logging.DEBUG)
 	Log.addHandler(fh)
 	db = sqlite3.connect(DB_NAME, timeout=30)
@@ -204,7 +204,7 @@ def buyableMonitor(buyable):
 	db.close()
 
 class AT:
-	__traderVersion__ = "0.1"
+	__traderVersion__ = "0.2a"
 	def _getPercentage(self, kline):
 		##Obtenemos el crecimiento completo en un Kline dado.
 		## NO FUNCIONA CON LINES DE KLINES, ya que busca apertura del primer kline y cierre del ultimo.
@@ -227,7 +227,7 @@ class AT:
 		return growARR
 	def _getMinMax(self, kline):
 		maximum = 0
-		minimum = 0
+		minimum = 99999
 		if len(kline) > 0:
 			#Determinamos el minimo y el maximo de un kline dado mirando aperturas y cierres.
 			for line in kline:
@@ -267,6 +267,8 @@ class AT:
 				perc = perc+m
 				if m > 0.4:
 					count = count + 1
+				elif m <= 0:
+					count = count - 1
 			if count >= 4 and perc >= 5:
 				self.monitor = True
 	def __init__(self, client, pair, hourKline, monitorPERC):
@@ -291,16 +293,16 @@ class AT:
 			self.setLimits()
 	def display(self):
 		if self.monitor == True:
-			Log = logging.getLogger("TradeLog")
+			Log = logging.getLogger("DisplayLog")
 			Log.setLevel(logging.DEBUG)
-			fh = logging.FileHandler(self.pair+"-"+str(datetime.now().date())+".log")
+			fh = logging.FileHandler(self.pair+"-"+str(datetime.now().date())+str(self.limitPrice)+".log")
 			fh.setLevel(logging.DEBUG)
 			Log.addHandler(fh)
 			print("-"*60)
 			print(self.pair+" MONITOR")
 			print(datetime.now())
-			print("DAY min/max: "+ f"{self.minDay:.10f}"+" / "+f"{self.maxDay:.10f}")
-			print("HOUR min/max: "+ f"{self.min1h:.10f}"+" / "+f"{self.max1h:.10f}")
+			print("DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}")
+			print("HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}")
 			print("Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%")
 			for line in self.grow1h[-7:]:
 				print("--: "+str(line)+"%")
@@ -309,8 +311,8 @@ class AT:
 			Log.info(AT.__traderVersion__)
 			Log.info(self.pair+" MONITOR")
 			Log.info(datetime.now())
-			Log.info("DAY min/max: "+ f"{self.minDay:.10f}"+" / "+f"{self.maxDay:.10f}")
-			Log.info("HOUR min/max: "+ f"{self.min1h:.10f}"+" / "+f"{self.max1h:.10f}")
+			Log.info("DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}")
+			Log.info("HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}")
 			Log.info("Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%")
 			for line in self.grow1h[-7:]:
 				Log.info("--: "+str(line)+"%")
@@ -429,7 +431,14 @@ if __name__ == "__main__":
 				getFULLHistoricPair(r)
 			print("Task Done")
 		elif sys.argv[1] == "trader":
-			trader(sys.argv[2],sys.argv[3], sys.argv[4])
+			if sys.argv[2] == "test":
+				pair = "BTCUSDT"
+				buy = Decimal(client.get_symbol_ticker(symbol = pair)["price"])
+				lim = (buy/100)*105
+				sto = (buy/100)*95
+				trader(pair, str(lim),str(sto))
+			else:
+				trader(sys.argv[2],sys.argv[3], sys.argv[4])
 		elif sys.argv[1] == "sysInfo":
 			t = datetime.now()
 			lap = timedelta(days=1)
