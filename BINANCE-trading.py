@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
+import logging
 import os
+import sqlite3
+import sys
+import time
+from datetime import datetime, timedelta
+from decimal import Decimal
+
 import requests
 from binance.client import Client
 from binance.websockets import BinanceSocketManager
 from twisted.internet import reactor
-from datetime import datetime, timedelta
-import sqlite3
-import time
-import sys
-from decimal import Decimal
-
 
 TEST_FLAG = False
 
@@ -134,6 +135,11 @@ def getFULLHistoricPair(symbol):
 
 
 def trader(sym, lim, sto):
+	Log = logging.getLogger("TradeLog")
+	Log.setLevel(logging.DEBUG)
+	fh = logging.FileHandler(sym+"-"+str(datetime.now().date())+".log")
+	fh.setLevel(logging.DEBUG)
+	Log.addHandler(fh)
 	db = sqlite3.connect(DB_NAME, timeout=30)
 	cur = db.cursor()
 	kline = client.get_historical_klines(sym, Client.KLINE_INTERVAL_1MINUTE, "1 hour ago UTC")
@@ -144,6 +150,9 @@ def trader(sym, lim, sto):
 	print("You buy at: "+str(actPrice))
 	print("You want to sell at: "+str(lim))
 	print("StopLoss at: "+str(sto))
+	Log.info("Open: "+str(actPrice))
+	Log.info("Limit: "+str(lim))
+	Log.info("Stop: "+str(sto))
 	nPrice = 0
 	try:
 		while True:
@@ -151,9 +160,11 @@ def trader(sym, lim, sto):
 			print(sym+": "+str(nPrice)+" | START: "+str(actPrice)+" | Lim/Sto: "+str(lim)+"/"+str(sto))
 			if nPrice >= Decimal(lim):
 				print("You win for:"+ str(nPrice))
+				Log.info("You win for:"+ str(nPrice))
 				break
 			elif nPrice <= Decimal(sto):
 				print("You lose for: "+str(nPrice))
+				Log.info("You lose for: "+str(nPrice))
 				break
 			time.sleep(5)
 		cur.execute("DELETE FROM trading WHERE symbol = '"+sym+"'")
@@ -167,7 +178,7 @@ def trader(sym, lim, sto):
 		db.close()
 		print("Trade Manually Stopped")
 		print("THIS IS TESTING. REMEMBER TO CANCEL YOUR ORDER")
-	input("END OF TRADE") 
+		Log.info("TRADE MANUALLY STOPPED")
 
 def buyableMonitor(buyable):
 	db = sqlite3.connect(DB_NAME, timeout=30)
@@ -193,6 +204,7 @@ def buyableMonitor(buyable):
 	db.close()
 
 class AT:
+	__traderVersion__ = "0.1"
 	def _getPercentage(self, kline):
 		##Obtenemos el crecimiento completo en un Kline dado.
 		## NO FUNCIONA CON LINES DE KLINES, ya que busca apertura del primer kline y cierre del ultimo.
@@ -256,8 +268,6 @@ class AT:
 				if m > 0.4:
 					count = count + 1
 			if count >= 4 and perc >= 5:
-				#price = self.client.get_symbol_ticker(symbol=self.pair)["price"]
-				#if price <= self.maxDay and price <= self.max1h:
 				self.monitor = True
 	def __init__(self, client, pair, hourKline, monitorPERC):
 		self.client = client
@@ -281,20 +291,39 @@ class AT:
 			self.setLimits()
 	def display(self):
 		if self.monitor == True:
+			Log = logging.getLogger("TradeLog")
+			Log.setLevel(logging.DEBUG)
+			fh = logging.FileHandler(self.pair+"-"+str(datetime.now().date())+".log")
+			fh.setLevel(logging.DEBUG)
+			Log.addHandler(fh)
 			print("-"*60)
 			print(self.pair+" MONITOR")
-			print(datetime.utcnow())
+			print(datetime.now())
 			print("DAY min/max: "+ f"{self.minDay:.10f}"+" / "+f"{self.maxDay:.10f}")
 			print("HOUR min/max: "+ f"{self.min1h:.10f}"+" / "+f"{self.max1h:.10f}")
 			print("Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%")
 			for line in self.grow1h[-7:]:
 				print("--: "+str(line)+"%")
 			print("EL PAR CUALIFICA, LANZANDO TRADER")
+			Log.info("-"*60)
+			Log.info(AT.__traderVersion__)
+			Log.info(self.pair+" MONITOR")
+			Log.info(datetime.now())
+			Log.info("DAY min/max: "+ f"{self.minDay:.10f}"+" / "+f"{self.maxDay:.10f}")
+			Log.info("HOUR min/max: "+ f"{self.min1h:.10f}"+" / "+f"{self.max1h:.10f}")
+			Log.info("Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%")
+			for line in self.grow1h[-7:]:
+				Log.info("--: "+str(line)+"%")
 			launch = "x-terminal-emulator -e python3 BINANCE-trading.py trader "+self.pair+" "+str(self.limitPrice)+" "+str(self.stopPrice)
 			#print(launch)
 			os.system(launch)
 
 def traderCounter():
+	effLog = logging.getLogger("EfectividadLog")
+	effLog.setLevel(logging.DEBUG)
+	fh = logging.FileHandler("Efectividad.log")
+	fh.setLevel(logging.DEBUG)
+	effLog.addHandler(fh)
 	db = sqlite3.connect(DB_NAME, timeout=30)
 	cur = db.cursor()
 	cur.execute("SELECT * FROM traded")
@@ -320,19 +349,21 @@ def traderCounter():
 		else:
 			bad  = bad + 1
 	db.close()
-	print("Fecha de comienzo: 24/12")
 	BTCEUR = Decimal(client.get_symbol_ticker(symbol="BTCEUR")["price"])*BTCprofit
 	ETHEUR = Decimal(client.get_symbol_ticker(symbol="ETHEUR")["price"])*ETHprofit
 	BNBEUR = Decimal(client.get_symbol_ticker(symbol="BNBEUR")["price"])*BNBprofit
+	effLog.info(datetime.now())
+	effLog.info("Trader Version: "+AT.__traderVersion__)
 	if profit > 0:
-		print("Beneficio No Cuantificable: "+str(profit))
-	print("Beneficio BTC: "+str(BTCEUR)+" €")
-	print("Beneficio ETH: "+str(ETHEUR)+" €")
-	print("Beneficio BNB: "+str(BNBEUR)+" €")
-	print("Beneficio TOTAL: "+str(BTCEUR+ETHEUR+BNBEUR)+"€")
-	print("Win/Lose/TOTAL: "+str(good)+"/"+str(bad)+"/"+str(len(symList)))
+		effLog.info("Beneficio No Cuantificable: "+str(profit))
+	effLog.info("Beneficio BTC: "+str(BTCEUR)+" €")
+	effLog.info("Beneficio ETH: "+str(ETHEUR)+" €")
+	effLog.info("Beneficio BNB: "+str(BNBEUR)+" €")
+	effLog.info("Beneficio TOTAL: "+str(BTCEUR+ETHEUR+BNBEUR)+"€")
+	effLog.info("Win/Lose/TOTAL: "+str(good)+"/"+str(bad)+"/"+str(len(symList)))
 	perc = round(good/len(symList)*100,3)
-	print("Efectividad: "+str(perc)+ " %")
+	effLog.info("Efectividad: "+str(perc)+ " %")
+	effLog.info("-"*30)
 
 
 if __name__ == "__main__":
@@ -346,6 +377,7 @@ if __name__ == "__main__":
 		-argv[2] par
 		-argv[3] precio limite. CONVERTIR A STR
 		-argv[4] precio stop. CONVERTIR A STR
+	- sysInfo- Ejecuta tareas de sistema cada 24h. De momento solo ejecuta el traderCounter
 	'''
 	#print(sys.argv)
 	try:
@@ -398,6 +430,19 @@ if __name__ == "__main__":
 			print("Task Done")
 		elif sys.argv[1] == "trader":
 			trader(sys.argv[2],sys.argv[3], sys.argv[4])
+		elif sys.argv[1] == "sysInfo":
+			t = datetime.now()
+			lap = timedelta(days=1)
+			try:
+				traderCounter()
+				print("Trader Counter Executed. Check Efectividad.log")
+				while True:
+					if datetime.now() >= t+lap:
+						t = datetime.now()
+						traderCounter()
+						print("Trader Counter Executed. Check Efectividad.log")
+			except KeyboardInterrupt:
+				print("sysInfo Manually Stopped")
 	except IndexError:
 		print("Faltan argumentos para ejecutar el script.")
 		traderCounter()
