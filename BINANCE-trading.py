@@ -29,72 +29,46 @@ else:
 	DB_NAME = "binanceTEST.db"
 
 def dbWriteSymbols():
-	'''Borra y reescribe completamente la tabla de simbolos en la base de datos'''
+	"""Borra y reescribe completamente la tabla de simbolos en la base de datos"""
 	db = sqlite3.connect(DB_NAME)
 	cur = db.cursor()
+	#Borra toda la tabla
 	cur.execute("DELETE FROM symbols")
 	db.commit()
+	#Obtiene todos los simbolos del exchange e itera sobre ellos.
 	for sym in client.get_exchange_info()["symbols"]:
+		#Añade los simbolos a la tabla. Los dos campos rellenos con guiones son de una version previa, sin uso ahora mismo.
 		cur.execute('INSERT INTO symbols VALUES("'+sym["symbol"]+'","-","-")')
 		db.commit()
 	db.close()
 	print("Symbol Database Fully Updated")
 
-def getSymbolTicker(sym):
-	db = sqlite3.connect(DB_NAME, timeout=30)
-	cur = db.cursor()
-	t = str(int(time.time()))
-	price = client.get_symbol_ticker(symbol=sym)
-	#print(sym+" | "+price["price"]+" | "+str(datetime.utcfromtimestamp(int(t))))
-	try:
-		cur.execute("DELETE FROM symbols WHERE symbol = '"+sym+"'")
-		db.commit()
-		cur.execute('INSERT INTO symbols VALUES("'+sym+'","'+price["price"]+'","'+t+'")')
-		db.commit()
-		cur.execute("CREATE TABLE IF NOT EXISTS "+sym+"price"+" (timestamp text, price text)")
-		db.commit()
-		cur.execute('INSERT INTO '+sym+'price'+' VALUES("'+t+'","'+price["price"]+'")')
-		db.commit()
-	except sqlite3.OperationalError:
-		print("Database Locked. Skipping DB log")
-	except requests.exceptions.ReadTimeout:
-		print("HTTP Read TimeOut. Skipping DB log")
-	db.close()
-	#print(sym+" Updated in Database")
-	return price
-
 def getSymbolList():
+	"""Obtiene una lista de pares limpia de la base de datos.
+	Requiere tratamiento porque la base de datos devuelve tuplas, aunque sean de un solo elemento.
+
+	Returns:
+		[List]: Lista con todos los simbolos en formato de cadenas de texto.
+	"""
 	db = sqlite3.connect(DB_NAME, timeout=30)
 	cur = db.cursor()
 	cur.execute("SELECT symbol FROM symbols")
 	symList = cur.fetchall()
 	db.close()
 	clean = []
+	#Itera sobre la lista obtenida de la base de datos y convierte las tuplas de un solo elemento en cadenas.
 	for i in symList:
 		clean.append(i[0])
 	return clean
 
-def getRelevantPairs():
-	'''EN PROGRESO. DEVUELVE LOS PARES RELACIONADOS COMPLETAMENTE CON LAS MONEDAS EN POSESION. ESTO PERMITE COMPRAS Y VENTAS SIN PROBLEMAS.
-	¿QUE FALTA?
-	- PUEDE INTERESAR VENDER UNA MONEDA QUE SE TIENE A UNA QUE NO SE POSEE. ESTA LISTA NO CONTEMPLARIA ESA POSIBILIDAD.
-	- PUEDE INTERESAR COMPRAR DESDE UNA MONEDA QUE NO SE POSEE. HABRIA QUE CONTEMPLAR ESA OPCION, PERO ES UN CAMINO MAS COMPLEJO.'''
-	symList = getSymbolList()
-	relevant = []
-	assets = []
-	for bal in client.get_account()["balances"]:
-		if Decimal(bal['free']) > 0:
-			assets.append(bal["asset"])
-	for sym in symList:
-		for ass in assets: #AHAHAHAHAHAH
-			if ass in sym[0:len(ass)]:
-				if sym[len(ass):] in assets:
-					relevant.append(sym)
-	#print("Relevant Pairs: "+str(len(relevant)))
-	#print(relevant)
-	return relevant
-
 def getBuyablePairs():
+	"""Devuelve los pares dentro del Exchange que pueden ser comprados con las monedas disponibles en el balance.
+	Cuando pase a producción, sería aconsejable hardcodear los valores de las monedas que se quieren utilizar como base
+	para evitar que el programa se confunda y utilice una moneda recien comprada para determinar los pares comprables.
+
+	Returns:
+		[List]: Lista de pares que se podrian comprar con las monedas disponibles.
+	"""
 	symList = getSymbolList()
 	buyable = []
 	assets = []
@@ -110,31 +84,17 @@ def getBuyablePairs():
 	#print(len(buyable))
 	return buyable
 
-def getFULLHistoricPair(symbol):
-	print("Requesting "+symbol+" Full Historic")
-	timestamp = client._get_earliest_valid_timestamp(symbol, '1d')
-	#print(type(timestamp))
-	#dt = datetime.utcfromtimestamp(timestamp/1000)
-	#print(dt)
-	db = sqlite3.connect(DB_NAME)
-	cur = db.cursor()
-	cur.execute("CREATE TABLE IF NOT EXISTS "+symbol+" (timestamp text, open text, high text, low text, close text, volume text)")
-	db.commit()
-	cur.execute("DELETE FROM "+symbol)
-	#commit the changes to db
-	db.commit()
-	#close the connection
-	bars = client.get_historical_klines(symbol, '30m', timestamp, limit=1000)
-	#print(len(bars))
-	#print(bars[0])
-	for i in bars:
-		cur.execute('INSERT INTO '+symbol+' VALUES("'+str(i[0])+'","'+i[1]+'","'+i[2]+'","'+i[3]+'","'+i[4]+'","'+i[5]+'")')
-		db.commit()
-		#print(datetime.utcfromtimestamp(i[0]/1000))
-	db.close()
-
-
 def trader(sym, lim, sto):
+	"""Funcion que monitoriza y actua sobre los trades. Los abre y cierra según los argumentos de entrada.
+	Puede recibir los precios limite y stop tanto en cadena como en Decimal. La funcion no asume ninguna entrada
+	para estos argumentos, convirtiendo siempre al correspondiente para el uso.
+	Interactua con la base de datos. Recoge el par de la tabla TRADING lo escribe en TRADED cuando este termina.
+
+	Args:
+		sym (String): Par de monedas a tradear.
+		lim (String|Decimal): Precio limite de venta en beneficio.
+		sto (String|Decimal): Precio limite de venta en perdida.
+	"""
 	Log = logging.getLogger("TradeLog")
 	Log.setLevel(logging.DEBUG)
 	fh = logging.FileHandler(sym+"-"+str(datetime.now().date())+str(lim)+".log")
@@ -179,8 +139,17 @@ def trader(sym, lim, sto):
 		print("Trade Manually Stopped")
 		print("THIS IS TESTING. REMEMBER TO CANCEL YOUR ORDER")
 		Log.info("TRADE MANUALLY STOPPED")
+	input("END OF TRADE")
 
 def buyableMonitor(buyable):
+	"""Es el bucle principal del programa. Itera sobre la lista de pares comprables generada por getBuyablePairs.
+	Como bucle principal, actua como interfaz entre la clase AT y la base de datos.
+	Cuando un par pasa el analisis de AT, se añade a la tabla TRADING de la base de datos, excluyendolo de sucesivas
+	vueltas hasta que el trade termina (y es eliminado de esa tabla por la funcion trader)
+
+	Args:
+		buyable (List): Tabla de pares posibles para comprar.
+	"""
 	db = sqlite3.connect(DB_NAME, timeout=30)
 	cur = db.cursor()
 	cur.execute("SELECT symbol FROM trading")
@@ -204,8 +173,18 @@ def buyableMonitor(buyable):
 	db.close()
 
 class AT:
+	"""Clase de analisis tecnico. Ejecuta el analisis de los pares y, si cumplen los parametros, ejecuta la funcion Trader.
+	"""
 	__traderVersion__ = "0.2a"
 	def _getPercentage(self, kline):
+		"""[summary]
+
+		Args:
+			kline ([type]): [description]
+
+		Returns:
+			[type]: [description]
+		"""
 		##Obtenemos el crecimiento completo en un Kline dado.
 		## NO FUNCIONA CON LINES DE KLINES, ya que busca apertura del primer kline y cierre del ultimo.
 		if len(kline) > 0:
@@ -216,6 +195,11 @@ class AT:
 		else:
 			return 0
 	def _getGrow(self):
+		"""[summary]
+
+		Returns:
+			[type]: [description]
+		"""
 		##Obtiene el crecimiento de cada line en el Kline de 1 hora.
 		growARR = []
 		if len(self.hourKline) > 0:
@@ -226,6 +210,11 @@ class AT:
 				growARR.append(perc)
 		return growARR
 	def _getMinMax(self, kline):
+		"""[summary]
+
+		Args:
+			kline ([type]): [description]
+		"""
 		maximum = 0
 		minimum = 99999
 		if len(kline) > 0:
@@ -243,6 +232,8 @@ class AT:
 					minimum = Decimal(line[4])
 		return[minimum,maximum]
 	def getDay(self):
+		"""[summary]
+		"""
 		##Obtenemos las Kline de las ultimas 24 horas por seguridad. 
 		dayKline = self.client.get_historical_klines(self.pair, Client.KLINE_INTERVAL_1HOUR, "1 hour ago UTC")
 		MinMax = self._getMinMax(dayKline)
@@ -250,16 +241,22 @@ class AT:
 		self.maxDay = MinMax[1]
 		self.growDay = self._getPercentage(dayKline)
 	def getHour(self):
+		"""[summary]
+		"""
 		MinMax = self._getMinMax(self.hourKline)
 		self.min1h = MinMax[0]
 		self.max1h = MinMax[1]
 		self.grow1h = self._getGrow()
 	def setLimits(self):
+		"""[summary]
+		"""
 		## 5% de perdida/beneficio fijo. Ya trabajaremos eso mejor.
 		act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
 		self.limitPrice = (act/100)*105
 		self.stopPrice = (act/100)*95
 	def startingAnalisys(self):
+		"""[summary]
+		"""
 		count = 0
 		perc = 0
 		if self.grow1hTOT > self.monitorPERC:
@@ -272,6 +269,14 @@ class AT:
 			if count >= 4 and perc >= 5:
 				self.monitor = True
 	def __init__(self, client, pair, hourKline, monitorPERC):
+		"""[summary]
+
+		Args:
+			client ([type]): [description]
+			pair ([type]): [description]
+			hourKline ([type]): [description]
+			monitorPERC ([type]): [description]
+		"""
 		self.client = client
 		self.pair = pair
 		self.hourKline = hourKline #kline de la ultima hora, minuto a minuto.
@@ -292,6 +297,8 @@ class AT:
 			self.getDay()
 			self.setLimits()
 	def display(self):
+		"""[summary]
+		"""
 		if self.monitor == True:
 			Log = logging.getLogger("DisplayLog")
 			Log.setLevel(logging.DEBUG)
@@ -321,6 +328,8 @@ class AT:
 			os.system(launch)
 
 def traderCounter():
+	"""[summary]
+	"""
 	effLog = logging.getLogger("EfectividadLog")
 	effLog.setLevel(logging.DEBUG)
 	fh = logging.FileHandler("Efectividad.log")
@@ -396,23 +405,6 @@ if __name__ == "__main__":
 						pass
 			except KeyboardInterrupt:
 				print("Symbol Monitor Manually Stopped")
-		elif sys.argv[1] == "relevantMonitor": #POSIBLEMENTE INUTIL
-			t = datetime.now()
-			lap = timedelta(seconds=30)
-			relevant = getRelevantPairs()
-			for r in relevant:
-				getSymbolTicker(r)
-			print("-"*60)
-			try:
-				while True:
-					if datetime.now() >= t+lap:
-						t = datetime.now()
-						relevant = getRelevantPairs()
-						for r in relevant:
-							getSymbolTicker(r)
-						print("-"*60)
-			except KeyboardInterrupt:
-				print("Relevant Monitor Manually Stopped")
 		elif sys.argv[1] == "buyableMonitor": ##UTILIZABLE 
 			t = datetime.now()
 			lap = timedelta(minutes=5)
@@ -425,11 +417,6 @@ if __name__ == "__main__":
 						buyableMonitor(buyable)
 			except KeyboardInterrupt:
 				print("Monitor Manually Stopped")
-		elif sys.argv[1] == "relevantFULLdata": #WHY NOT
-			relevant = getRelevantPairs()
-			for r in relevant:
-				getFULLHistoricPair(r)
-			print("Task Done")
 		elif sys.argv[1] == "trader":
 			if sys.argv[2] == "test":
 				pair = "BTCUSDT"
