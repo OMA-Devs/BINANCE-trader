@@ -95,11 +95,8 @@ def trader(sym, lim, sto):
 		lim (String|Decimal): Precio limite de venta en beneficio.
 		sto (String|Decimal): Precio limite de venta en perdida.
 	"""
-	Log = logging.getLogger("TradeLog")
-	Log.setLevel(logging.DEBUG)
-	fh = logging.FileHandler(sym+"-"+str(datetime.now().date())+str(lim)+".log")
-	fh.setLevel(logging.DEBUG)
-	Log.addHandler(fh)
+	logName = sym+"-"+str(datetime.now().date())+"-"+str(lim)
+	Log = logging.getLogger(logName)
 	db = sqlite3.connect(DB_NAME, timeout=30)
 	cur = db.cursor()
 	kline = client.get_historical_klines(sym, Client.KLINE_INTERVAL_1MINUTE, "1 hour ago UTC")
@@ -117,14 +114,14 @@ def trader(sym, lim, sto):
 	try:
 		while True:
 			nPrice = Decimal(client.get_symbol_ticker(symbol=sym)["price"])
-			print(sym+": "+str(nPrice)+" | START: "+str(actPrice)+" | Lim/Sto: "+str(lim)+"/"+str(sto))
+			print(sym+": "+f"{nPrice:.15f}"+" | START: "+f"{actPrice:.15f}"+" | Lim/Sto: "+f"{lim:.15f}"+"/"+f"{sto:.15f}")
 			if nPrice >= Decimal(lim):
-				print("You win for:"+ str(nPrice))
-				Log.info("You win for:"+ str(nPrice))
+				print("You win for:"+ f"{nPrice:.15f}")
+				Log.info("You win for:"+ f"{nPrice:.15f}")
 				break
 			elif nPrice <= Decimal(sto):
-				print("You lose for: "+str(nPrice))
-				Log.info("You lose for: "+str(nPrice))
+				print("You lose for:"+ f"{nPrice:.15f}")
+				Log.info("You lose for:"+ f"{nPrice:.15f}")
 				break
 			time.sleep(5)
 		cur.execute("DELETE FROM trading WHERE symbol = '"+sym+"'")
@@ -300,9 +297,10 @@ class AT:
 		"""[summary]
 		"""
 		if self.monitor == True:
-			Log = logging.getLogger("DisplayLog")
+			logName = self.pair+"-"+str(datetime.now().date())+"-"+str(self.limitPrice)
+			Log = logging.getLogger(logName)
 			Log.setLevel(logging.DEBUG)
-			fh = logging.FileHandler(self.pair+"-"+str(datetime.now().date())+str(self.limitPrice)+".log")
+			fh = logging.FileHandler(logName+".log")
 			fh.setLevel(logging.DEBUG)
 			Log.addHandler(fh)
 			print("-"*60)
@@ -394,7 +392,7 @@ if __name__ == "__main__":
 	try:
 		if sys.argv[1] == "symbolMonitor":
 			t = datetime.now()
-			lap = timedelta(hours=1)
+			lap = timedelta(hours=12)
 			dbWriteSymbols()
 			try:
 				while True:
@@ -423,20 +421,22 @@ if __name__ == "__main__":
 				buy = Decimal(client.get_symbol_ticker(symbol = pair)["price"])
 				lim = (buy/100)*105
 				sto = (buy/100)*95
-				trader(pair, str(lim),str(sto))
+				trader(pair, lim, sto)
 			else:
-				trader(sys.argv[2],sys.argv[3], sys.argv[4])
+				trader(sys.argv[2],Decimal(sys.argv[3]), Decimal(sys.argv[4]))
 		elif sys.argv[1] == "sysInfo":
 			t = datetime.now()
 			lap = timedelta(days=1)
 			try:
 				traderCounter()
 				print("Trader Counter Executed. Check Efectividad.log")
+				dbWriteSymbols()
 				while True:
 					if datetime.now() >= t+lap:
 						t = datetime.now()
 						traderCounter()
 						print("Trader Counter Executed. Check Efectividad.log")
+						dbWriteSymbols()
 			except KeyboardInterrupt:
 				print("sysInfo Manually Stopped")
 	except IndexError:
