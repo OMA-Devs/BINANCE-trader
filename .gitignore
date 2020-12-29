@@ -1,4 +1,5 @@
-ALPACA-tradingBot.py
 binance-comments.py
-symbols.db
 .vscode/settings.json
+logs/
+BINANCE-trading-wip.py
+__pycache__/

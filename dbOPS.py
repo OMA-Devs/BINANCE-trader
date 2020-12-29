@@ -74,6 +74,24 @@ class DB:
 		for i in symList:
 			monitored.append(i[0])
 		return monitored
+	def getTRADINGsingle(self, version, sym):
+		"""TESTING
+		"""
+		db = sqlite3.connect(self.name, timeout=30)
+		cur = db.cursor()
+		cur.execute("SELECT symbol FROM trading"+str(version)+" WHERE symbol = '"+sym+"'")
+		symList = cur.fetchall()
+		#print(sym+str(len(symList)))
+		if len(symList) > 0:
+			return True
+		else:
+			return False
+	def getTRADED(self, version):
+		db = sqlite3.connect(self.name, timeout=30)
+		cur = db.cursor()
+		cur.execute("SELECT * FROM traded"+str(version))
+		symList= cur.fetchall()
+		return symList
 	def tradeEND(self, version, sym, buyP, sellP, endTS):
 		"""Transfiere un trade terminado de la tabla TRADING a TRADED. Incluye el numero de version del algoritmo para identificar correctamente
 		las tablas.
@@ -91,7 +109,7 @@ class DB:
 		startTS = cur.fetchall()[0][0]
 		cur.execute("DELETE FROM trading"+str(version)+" WHERE symbol = '"+sym+"'")
 		db.commit()
-		cur.execute("INSERT INTO traded"+str(version)+" VALUES('"+sym+"','"+f"{buyP:.15f}"+"','"+f"{sellP:.15f}"+"','"+startTS+"','"+str(endTS)+"')")
+		cur.execute("INSERT INTO traded"+str(version)+" VALUES('"+sym+"','"+f"{buyP:.15f}"+"','"+f"{sellP:.15f}"+"','"+str(startTS)+"','"+str(endTS)+"')")
 		db.commit()
 		db.close()
 	def tradeSTART(self, version, sym, startTS):
@@ -104,6 +122,12 @@ class DB:
 		"""
 		db = sqlite3.connect(self.name, timeout=30)
 		cur = db.cursor()
-		cur.execute("INSERT INTO trading"+str(version)+" VALUES('"+sym+"','"+startTS+"')")
+		cur.execute("INSERT INTO trading"+str(version)+" VALUES('"+sym+"','"+str(startTS)+"')")
+		db.commit()
+		db.close()
+	def removeTrade(self, version, sym):
+		db = sqlite3.connect(self.name, timeout=30)
+		cur = db.cursor()
+		cur.execute("DELETE FROM trading"+str(version)+" WHERE symbol = '"+sym+"'")
 		db.commit()
 		db.close()
