@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import logging
 import os
 import sqlite3
 import sys
@@ -70,22 +69,10 @@ def trader(sym, lim, sto, v):
 		v (Integer) : Version del algoritmo que activa el trader
 	"""
 	logName = sym+"-"+str(datetime.now().date())+"-"+str(v)+"-"+str(lim)
-	Log = logging.getLogger(logName)
-	Log.setLevel(logging.DEBUG)
-	fh = logging.FileHandler(logName+".log")
-	fh.setLevel(logging.DEBUG)
-	Log.addHandler(fh)
-	kline = client.get_historical_klines(sym, Client.KLINE_INTERVAL_1MINUTE, "1 hour ago UTC")
-	#perc = getPercentage(kline)
-	LastPrice = Decimal(kline[-1][4])
-	print("Last Price at: "+ str(LastPrice))
 	actPrice = Decimal(client.get_symbol_ticker(symbol= sym)["price"])
-	print("You buy at: "+str(actPrice))
-	print("You want to sell at: "+str(lim))
-	print("StopLoss at: "+str(sto))
-	Log.info("Open: "+str(actPrice))
-	Log.info("Limit: "+str(lim))
-	Log.info("Stop: "+str(sto))
+	mesARR = ["You buy at: "+str(actPrice),
+			"Limit at: "+str(lim),
+			"StopLoss at: "+str(sto)]
 	nPrice = 0
 	db.tradeSTART(v,sym,datetime.timestamp(datetime.now()))
 	try:
@@ -93,21 +80,21 @@ def trader(sym, lim, sto, v):
 			nPrice = Decimal(client.get_symbol_ticker(symbol=sym)["price"])
 			print(sym+": "+f"{nPrice:.15f}"+" | START: "+f"{actPrice:.15f}"+" | Lim/Sto: "+f"{lim:.15f}"+"/"+f"{sto:.15f}")
 			if nPrice >= Decimal(lim):
-				print("You win for:"+ f"{nPrice:.15f}")
-				Log.info("You win for:"+ f"{nPrice:.15f}")
+				mesARR.append("You win for:"+ f"{nPrice:.15f}")
 				break
 			elif nPrice <= Decimal(sto):
-				print("You lose for:"+ f"{nPrice:.15f}")
-				Log.info("You lose for:"+ f"{nPrice:.15f}")
+				mesARR.append("You lose for:"+ f"{nPrice:.15f}")
 				break
 			time.sleep(5)
 		db.tradeEND(v,sym,actPrice,nPrice,datetime.timestamp(datetime.now()))
+		logger(logName, mesARR)
 	except KeyboardInterrupt:
 		db.removeTrade(v,sym)
 		print("Trade Manually Stopped")
 		print("THIS IS TESTING. REMEMBER TO CANCEL YOUR ORDER.")
-		Log.info("TRADE MANUALLY STOPPED")
-	input("END OF TRADE")
+		mesARR.append("TRADE MANUALLY STOPPED")
+		logger(logName, mesARR)
+	#input("END OF TRADE")
 
 def buyableMonitor(buyable):
 	"""Es el bucle principal del programa. Itera sobre la lista de pares comprables generada por getBuyablePairs.
@@ -258,28 +245,16 @@ class AT:
 		"""
 		if self.monitor == True:
 			logName = self.pair+"-"+str(datetime.now().date())+"-"+str(self.version)+"-"+str(self.limitPrice)
-			Log = logging.getLogger(logName)
-			Log.setLevel(logging.DEBUG)
-			fh = logging.FileHandler(logName+".log")
-			fh.setLevel(logging.DEBUG)
-			Log.addHandler(fh)
-			print("-"*60)
-			print(self.pair+" MONITOR"+str(self.version))
-			print(datetime.now())
-			print("DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}")
-			print("HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}")
-			print("Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%")
+			mesARR = ["-"*60,
+					self.pair+" MONITOR v"+str(self.version),
+					str(datetime.now()),
+					"DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}",
+					"HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}",
+					"Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%"]
 			for line in self.grow1h[-7:]:
-				print("--: "+str(line)+"%")
-			Log.info("-"*60)
-			Log.info(self.pair+" MONITOR"+str(self.version))
-			Log.info(datetime.now())
-			Log.info("DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}")
-			Log.info("HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}")
-			Log.info("Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%")
-			for line in self.grow1h[-7:]:
-				Log.info("--: "+str(line)+"%")
-			launch = "x-terminal-emulator -e python3 BINANCE-trading.py trader "+self.pair+" "+str(self.limitPrice)+" "+str(self.stopPrice)+" "+str(self.version)
+				mesARR.append("--: "+str(line)+"%")
+			logger(logName,mesARR)
+			launch = "x-terminal-emulator -e python3 "+sys.argv[0]+" trader "+self.pair+" "+str(self.limitPrice)+" "+str(self.stopPrice)+" "+str(self.version)
 			#print(launch)
 			os.system(launch)
 
@@ -289,11 +264,7 @@ def traderCounter(v):
 	Args:
 		v ([type]): [description]
 	"""
-	effLog = logging.getLogger("EfectividadLog")
-	effLog.setLevel(logging.DEBUG)
-	fh = logging.FileHandler("Efectividad.log")
-	fh.setLevel(logging.DEBUG)
-	effLog.addHandler(fh)
+	logName = "Efectividad"
 	symList = db.getTRADED(v)
 	BTCprofit = 0
 	ETHprofit = 0
@@ -318,19 +289,26 @@ def traderCounter(v):
 	BTCEUR = Decimal(client.get_symbol_ticker(symbol="BTCEUR")["price"])*BTCprofit
 	ETHEUR = Decimal(client.get_symbol_ticker(symbol="ETHEUR")["price"])*ETHprofit
 	BNBEUR = Decimal(client.get_symbol_ticker(symbol="BNBEUR")["price"])*BNBprofit
-	effLog.info(datetime.now())
-	effLog.info("Trader Version: "+str(v))
-	if profit > 0:
-		effLog.info("Beneficio No Cuantificable: "+str(profit))
-	effLog.info("Beneficio BTC: "+str(BTCEUR)+" €")
-	effLog.info("Beneficio ETH: "+str(ETHEUR)+" €")
-	effLog.info("Beneficio BNB: "+str(BNBEUR)+" €")
-	effLog.info("Beneficio TOTAL: "+str(BTCEUR+ETHEUR+BNBEUR)+"€")
-	effLog.info("Win/Lose/TOTAL: "+str(good)+"/"+str(bad)+"/"+str(len(symList)))
 	perc = round(good/len(symList)*100,3)
-	effLog.info("Efectividad: "+str(perc)+ " %")
-	effLog.info("-"*30)
+	mesARR = [str(datetime.now()),
+			"Trader Version: "+str(v),
+			"Beneficio BTC: "+str(BTCEUR)+" €",
+			"Beneficio ETH: "+str(ETHEUR)+" €",
+			"Beneficio BNB: "+str(BNBEUR)+" €",
+			"Beneficio TOTAL: "+str(BTCEUR+ETHEUR+BNBEUR)+"€",
+			"Win/Lose/TOTAL: "+str(good)+"/"+str(bad)+"/"+str(len(symList)),
+			"Efectividad: "+str(perc)+ " %"]
+	if profit > 0:
+		mesARR.append("Beneficio No Cuantificable: "+str(profit))
+	mesARR.append("-"*30)
+	logger(logName, mesARR)
 
+def logger(logName, mesARR):
+	f = open("logs/"+logName+".log", "a+")
+	for line in mesARR:
+		f.write(line+"\n")
+		print(line)
+	f.close()
 
 if __name__ == "__main__":
 	'''
@@ -378,7 +356,7 @@ if __name__ == "__main__":
 				sto = (buy/100)*95
 				trader(pair, lim, sto, ALGO.__versions__[-1])
 			else:
-				trader(sys.argv[2],Decimal(sys.argv[3]), Decimal(sys.argv[4]),int(sys.argv[5]))
+				trader(sys.argv[2],Decimal(sys.argv[3]), Decimal(sys.argv[4]),sys.argv[5])
 	except IndexError:
 		print("Faltan argumentos para ejecutar el script.")
 		'''for i in ALGO.__versions__:
