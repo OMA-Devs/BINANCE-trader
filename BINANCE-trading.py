@@ -359,8 +359,8 @@ if __name__ == "__main__":
 				trader(sys.argv[2],Decimal(sys.argv[3]), Decimal(sys.argv[4]),sys.argv[5])
 	except IndexError:
 		print("Faltan argumentos para ejecutar el script.")
-		'''for i in ALGO.__versions__:
-			traderCounter(i)'''
-		traderCounter(2)
+		for i in ALGO.__versions__:
+			traderCounter(i)
+		#traderCounter(2)
 	except requests.exceptions.ConnectionError:
 		print("Could not connect to API")
