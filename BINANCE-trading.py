@@ -361,6 +361,5 @@ if __name__ == "__main__":
 		print("Faltan argumentos para ejecutar el script.")
 		for i in ALGO.__versions__:
 			traderCounter(i)
-		#traderCounter(2)
 	except requests.exceptions.ConnectionError:
 		print("Could not connect to API")
