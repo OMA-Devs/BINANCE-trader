@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 class ALGO:
-	__retired__ = ["01"]
-	__versions__ = ["02","03"]
+	__retired__ = ["01","02"]
+	__versions__ = ["03", "04"]
 	def v01(self):
 		"""Version inicial. RETIRADA.
 			Informe efectividad
@@ -39,16 +39,17 @@ class ALGO:
 		else:
 			return False
 	def v02(self):
-		"""Pasa a segunda ronda contra v01. Activa.
-			Informe de efectividad 12h.
-			|	DESDE: 29/12/20 08:43	HASTA: 01/01/21 13:36
+		"""Pasa a segunda ronda contra v01. RETIRADA.
+			Informe de efectividad
+			|	DESDE: 29/12/20 08:43	HASTA: 02/01/21 16:23
 			|	Trader Version: 02
-			|	Beneficio BTC: 0.00459591000000000000000 €
-			|	Beneficio ETH: -0.00006674470000000000000 €
-			|	Beneficio BNB: -0.00265227000000000000000 €
-			|	Beneficio TOTAL: 0.00187689530000000000000€
-			|	Win/Lose/TOTAL: 1/5/6
-			|	Efectividad: 16.667 %
+			|	Beneficio BTC: -0.03067053600000000000000 €
+			|	Beneficio ETH: -0.00006842220000000000000 €
+			|	Beneficio BNB: -0.00189100610000000000000 €
+			|	Beneficio TOTAL: -0.03262996430000000000000€
+			|	Win/Lose/TOTAL: 7/9/16
+			|	Efectividad: 43.75 %
+			------------------------------
 			------------------------------
 			Anda muy justa respecto a v01 de efectividad. Abre muchisimos menos trades, pero incurre en menos perdidas,
 			cayendo en negativo solo en BNB. Genera beneficio, pero solo por la cualidad conservadora de sus aperturas.
@@ -56,6 +57,9 @@ class ALGO:
 
 			A plazo mas largo, la efectividad se reduce, pero continua con el balance positivo. De cualquier modo, es infimo.
 			Solo se mantiene como version de prueba porque no incurre en tanto riesgo como v01.
+
+			Efectivamente, a largo plazo termina generando pérdidas. Aunque la efectividad ha aumentado drasticamente, las
+			perdidas tambien aumentan. Se retira la version.
 
 		Returns:
 			Boolean: cualifica o no para abrir trade
@@ -83,6 +87,28 @@ class ALGO:
 		else:
 			return False
 	def v03(self):
+		"""Pruebas iniciales contra v02. ACTIVA
+			Informe de efectividad
+			|	01/01/21 a 02/01/21
+			|	Trader Version: 03
+			|	Beneficio BTC: -0.02274499130000000000000 €
+			|	Beneficio ETH: -0.02483103840000000000000 €
+			|	Beneficio BNB: -0.12347339830000000000000 €
+			|	Beneficio TOTAL: -0.17104942800000000000000€
+			|	Win/Lose/TOTAL: 29/37/66
+			|	Efectividad: 43.939 %
+			------------------------------
+			Mantiene una efectividad alta con un gran numero de trades. Es la primera version con un sistema de pesos dinamico
+			para identificar la relevancia de los ultimos porcentajes. Basicamente asigna puntos en base a los ultimos 3 minutos,
+			asignando más cuanto más cerca estan en el tiempo para localizar las subidas.
+
+			Al ser la primera versión y analizando los trades, se han identificado varias vulnerabilidades que se intentaran paliar
+			en v04, contra la que se va a medir. 
+
+
+		Returns:
+			[type]: [description]
+		"""
 		weight = 0
 		if self.at.grow1hTOT >= self.at.monitorPERC:
 			min3 = self.at.grow1h[-3:]
@@ -91,18 +117,39 @@ class ALGO:
 					weight = weight + ((ind+1)*2)
 				else:
 					weight = weight - ((ind+1)*2)
-			'''if min3[0] > 0:
-				weight = weight + 2
+			if weight >= 5:
+				return True
 			else:
-				weight = weight + 2
-			if min3[1] > 0:
-				weight = weight + 4
-			else:
-				weight = weight - 4
-			if min3[1] > 0:
-				weight = weight + 6
-			else:
-				weight = weight - 6'''
+				return False
+		else:
+			return False
+	def v04(self):
+		"""Pruebas iniciales contra v03. ACTIVA
+			Informe de efectividad
+			|	
+			------------------------------
+			Posee el mismo esquema basico de pesos que v03 pero añade una condicion AND a la puntuación. Cada porcentaje debe ser mayor que
+			el anterior para identificar las oportunidades ganadoras mucho mejor. Esto va a cortar muchos trades perdedores de la v03, aunque
+			he identificado otros ganadores que tambien se perderán.
+
+
+		Returns:
+			[type]: [description]
+		"""
+		weight = 0
+		if self.at.grow1hTOT >= self.at.monitorPERC:
+			min3 = self.at.grow1h[-3:]
+			for ind, val in enumerate(min3):
+				try:
+					if val >= 0.5 and val < min3[ind+1]:
+						weight = weight + ((ind+1)*2)
+					else:
+						weight = weight - ((ind+1)*2)
+				except IndexError:
+					if val >= 0.5 :
+						weight = weight + ((ind+1)*2)
+					else:
+						weight = weight - ((ind+1)*2)
 			if weight >= 5:
 				return True
 			else:
