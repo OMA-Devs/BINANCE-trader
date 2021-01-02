@@ -116,7 +116,7 @@ def buyableMonitor(buyable):
 	else:
 		for b in buyable:
 			kline = client.get_historical_klines(b, Client.KLINE_INTERVAL_1MINUTE, "1 hour ago UTC")
-			at = AT(client,b, kline, int(sys.argv[2]))
+			at = AT(client,b, kline, sys.argv[2])
 			at.display()
 
 
