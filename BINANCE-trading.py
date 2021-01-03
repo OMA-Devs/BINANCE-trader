@@ -58,27 +58,29 @@ def getBuyablePairs():
 
 def trader(sym, lim, sto, v):
 	"""Funcion que monitoriza y actua sobre los trades. Los abre y cierra según los argumentos de entrada.
-	Puede recibir los precios limite y stop tanto en cadena como en Decimal. La funcion no asume ninguna entrada
-	para estos argumentos, convirtiendo siempre al correspondiente para el uso.
+	Puede recibir los PORCENTAJES limite y stop tanto en cadena como en Decimal, pero habitualmente los recibira en
+	cadena por linea de comandos. La funcion no asume ninguna entrada	para estos argumentos, convirtiendo siempre al correspondiente para el uso.
 	Interactua con la base de datos. Recoge el par de la tabla TRADING lo escribe en TRADED cuando este termina.
 
 	Args:
 		sym (String): Par de monedas a tradear.
-		lim (String|Decimal): Precio limite de venta en beneficio.
-		sto (String|Decimal): Precio limite de venta en perdida.
+		lim (String|Decimal): Porcentaje limite de venta en beneficio.
+		sto (String|Decimal): Porcentaje limite de venta en perdida.
 		v (Integer) : Version del algoritmo que activa el trader
 	"""
-	logName = sym+"-"+str(datetime.now().date())+"-"+str(v)+"-"+str(lim)
+	logName = sym+"-"+str(datetime.now().date())+"-"+str(v)
 	actPrice = Decimal(client.get_symbol_ticker(symbol= sym)["price"])
+	limPrice = (actPrice/100)*int(lim)
+	stoPrice = (actPrice/100)*int(sto)
 	mesARR = ["You buy at: "+str(actPrice),
-			"Limit at: "+str(lim),
-			"StopLoss at: "+str(sto)]
+			"Limit at: "+str(lim)+"%: "+f"{limPrice:.15f}",
+			"StopLoss at: "+str(sto)+"%: "+f"{stoPrice:.15f}"]
 	nPrice = 0
 	db.tradeSTART(v,sym,datetime.timestamp(datetime.now()))
 	try:
 		while True:
 			nPrice = Decimal(client.get_symbol_ticker(symbol=sym)["price"])
-			print(sym+": "+f"{nPrice:.15f}"+" | START: "+f"{actPrice:.15f}"+" | Lim/Sto: "+f"{lim:.15f}"+"/"+f"{sto:.15f}")
+			print(sym+": "+f"{nPrice:.15f}"+" | START: "+f"{actPrice:.15f}"+" | Lim/Sto: "+f"{limPrice:.15f}"+"/"+f"{stoPrice:.15f}")
 			if nPrice >= Decimal(lim):
 				mesARR.append("You win for:"+ f"{nPrice:.15f}")
 				break
@@ -196,12 +198,26 @@ class AT:
 		self.max1h = MinMax[1]
 		self.grow1h = self._getGrow()
 	def setLimits(self):
-		"""[summary]
+		"""Marca los porcentajes de limite y stop para pasarlos al Trader. El porcentaje marcado
+		depende de la maxima y minima diaria. Intentará marcar un 5-10% de limite y un 5-8% de perdida
+		teniendo en cuenta esos parametros.
+
+		Si la funcion no puede determinar porcentajes beneficio/perdida, hace fallback a un 5-5% de limite/stop
 		"""
-		## 5% de perdida/beneficio fijo. Ya trabajaremos eso mejor.
 		act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
-		self.limitPrice = (act/100)*105
-		self.stopPrice = (act/100)*95
+		for i in range(105,111):
+		#Comprueba si puede generar un beneficio superior al 5%
+			if (act/100)*i < self.maxDay:
+				self.limitPrice = i
+		if self.limitPrice == 0:
+			self.limitPrice = 105
+		########################################################
+		for i in range(92, 96):
+		#Comprueba si puede marcar un stop menor al 8%
+			if (act/100)*i > self.minDay:
+				self.stopPrice = i
+		if self.stopPrice == 0:
+			self.stopPrice == 5
 	def startingAnalisys(self):
 		"""[summary]
 		"""
@@ -244,14 +260,14 @@ class AT:
 		"""[summary]
 		"""
 		if self.monitor == True:
-			logName = self.pair+"-"+str(datetime.now().date())+"-"+str(self.version)+"-"+str(self.limitPrice)
+			logName = self.pair+"-"+str(datetime.now().date())+"-"+str(self.version)
 			mesARR = ["-"*60,
 					self.pair+" MONITOR v"+str(self.version),
 					str(datetime.now()),
 					"DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}",
 					"HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}",
 					"Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%"]
-			for line in self.grow1h[-7:]:
+			for line in self.grow1h[-3:]:
 				mesARR.append("--: "+str(line)+"%")
 			logger(logName,mesARR)
 			launch = "x-terminal-emulator -e python3 "+sys.argv[0]+" trader "+self.pair+" "+str(self.limitPrice)+" "+str(self.stopPrice)+" "+str(self.version)
@@ -319,10 +335,11 @@ if __name__ == "__main__":
 		-argv[2] version de algoritmo
 	- trader- Ejecuta el bot trader
 		-argv[2] par
-		-argv[3] precio limite. CONVERTIR A STR
-		-argv[4] precio stop. CONVERTIR A STR
+		-argv[3] porcentaje limite. CONVERTIR A INT
+		-argv[4] porcentaje stop. CONVERTIR A INT
 		-argv[5] version del algoritmo
- 	- sysInfo- Ejecuta tareas de sistema cada 24h. De momento solo ejecuta el traderCounter
+ 	- counter- Ejecuta el control de efectividad de las versiones de algoritmo.
+	 	-argv[2] version del algoritmo o FULL. Si esta ausente, se efectuará el control de la ultima version implementada
 	'''
 	#print(sys.argv)
 	try:
@@ -352,14 +369,21 @@ if __name__ == "__main__":
 			if sys.argv[2] == "test":
 				pair = "BTCUSDT"
 				buy = Decimal(client.get_symbol_ticker(symbol = pair)["price"])
-				lim = (buy/100)*105
-				sto = (buy/100)*95
+				lim = 105
+				sto = 95
 				trader(pair, lim, sto, ALGO.__versions__[-1])
 			else:
-				trader(sys.argv[2],Decimal(sys.argv[3]), Decimal(sys.argv[4]),sys.argv[5])
+				trader(sys.argv[2],int(sys.argv[3]), int(sys.argv[4]),sys.argv[5])
+		elif sys.argv[1] == "counter":
+			try:
+				if sys.argv[2] == "FULL":
+					for i in ALGO.__versions__:
+						traderCounter(i)
+				else:
+					traderCounter(sys.argv[2])
+			except IndexError:
+				traderCounter(ALGO.__versions__[-1])
 	except IndexError:
 		print("Faltan argumentos para ejecutar el script.")
-		for i in ALGO.__versions__:
-			traderCounter(i)
 	except requests.exceptions.ConnectionError:
 		print("Could not connect to API")
