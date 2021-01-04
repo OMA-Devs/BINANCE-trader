@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from decimal import Decimal
+
 class ALGO:
 	__retired__ = ["01","02"]
 	__versions__ = ["03", "04"]
@@ -131,6 +133,7 @@ class ALGO:
 			Posee el mismo esquema basico de pesos que v03 pero añade una condicion AND a la puntuación. Cada porcentaje debe ser mayor que
 			el anterior para identificar las oportunidades ganadoras mucho mejor. Esto va a cortar muchos trades perdedores de la v03, aunque
 			he identificado otros ganadores que tambien se perderán.
+			Se añade además una condicion para que el limite no sea nunca superior al maximo diario encontrado.
 
 
 		Returns:

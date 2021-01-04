@@ -81,10 +81,10 @@ def trader(sym, lim, sto, v):
 		while True:
 			nPrice = Decimal(client.get_symbol_ticker(symbol=sym)["price"])
 			print(sym+": "+f"{nPrice:.15f}"+" | START: "+f"{actPrice:.15f}"+" | Lim/Sto: "+f"{limPrice:.15f}"+"/"+f"{stoPrice:.15f}")
-			if nPrice >= Decimal(lim):
+			if nPrice >= limPrice:
 				mesARR.append("You win for:"+ f"{nPrice:.15f}")
 				break
-			elif nPrice <= Decimal(sto):
+			elif nPrice <= stoPrice:
 				mesARR.append("You lose for:"+ f"{nPrice:.15f}")
 				break
 			time.sleep(5)
@@ -171,15 +171,11 @@ class AT:
 			#Determinamos el minimo y el maximo de un kline dado mirando aperturas y cierres.
 			for line in kline:
 				##Maximo
-				if Decimal(line[1]) > maximum:
-					maximum = Decimal(line[1])
-				elif Decimal(line[4]) > maximum:
-					maximum = Decimal(line[4])
+				if Decimal(line[2]) > maximum:
+					maximum = Decimal(line[2])
 				#Minimo
-				if Decimal(line[1]) < minimum:
-					minimum = Decimal(line[1])
-				elif Decimal(line[4]) < minimum:
-					minimum = Decimal(line[4])
+				if Decimal(line[3]) < minimum:
+					minimum = Decimal(line[3])
 		return[minimum,maximum]
 	def getDay(self):
 		"""[summary]
@@ -207,21 +203,28 @@ class AT:
 		act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
 		for i in range(105,111):
 		#Comprueba si puede generar un beneficio superior al 5%
-			if (act/100)*i < self.maxDay:
+			if (act/100)*i < self.max1h:
 				self.limitPrice = i
-		if self.limitPrice == 0:
-			self.limitPrice = 105
+		#if self.limitPrice == 0:
+		#	self.limitPrice = 105
 		########################################################
 		for i in range(92, 96):
 		#Comprueba si puede marcar un stop menor al 8%
-			if (act/100)*i > self.minDay:
+			if (act/100)*i > self.min1h:
 				self.stopPrice = i
 		if self.stopPrice == 0:
-			self.stopPrice == 5
+			self.stopPrice = 95
 	def startingAnalisys(self):
 		"""[summary]
 		"""
 		self.monitor = ALGO(self, self.version).analisis()
+		if self.monitor == True:
+			self.getDay()
+			self.setLimits()
+			##Esto significa que en la funcion setLimits el limite se ha detectado como superior al precio maximo.
+			##En este caso se cancela el monitoreo.
+			if self.limitPrice == 0:
+				self.monitor = False
 		#print(self.monitor)
 	def __init__(self, client, pair, hourKline, version):
 		"""[summary]
@@ -251,9 +254,6 @@ class AT:
 			#self.algo = ALGO(self, self.version)
 			self.getHour()
 			self.startingAnalisys()
-			if self.monitor == True:
-				self.getDay()
-				self.setLimits()
 		else:
 			self.monitor = False
 	def display(self):
