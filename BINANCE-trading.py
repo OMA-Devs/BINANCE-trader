@@ -177,6 +177,19 @@ class AT:
 				if Decimal(line[3]) < minimum:
 					minimum = Decimal(line[3])
 		return[minimum,maximum]
+	def _getMedium(self,kline):
+		nums = []
+		med = 0
+		if len(kline) > 0:
+			for line in kline:
+				minimum = Decimal(line[3])
+				maximum = Decimal(line[4])
+				num = (minimum+maximum)/2
+				nums.append(num)
+		for num in nums:
+			med = med + num
+		med = med/len(nums)
+		return med
 	def getDay(self):
 		"""[summary]
 		"""
@@ -185,6 +198,7 @@ class AT:
 		MinMax = self._getMinMax(dayKline)
 		self.minDay = MinMax[0]
 		self.maxDay = MinMax[1]
+		self.medDay = self._getMedium(dayKline)
 		self.growDay = self._getPercentage(dayKline)
 	def getHour(self):
 		"""[summary]
@@ -192,6 +206,7 @@ class AT:
 		MinMax = self._getMinMax(self.hourKline)
 		self.min1h = MinMax[0]
 		self.max1h = MinMax[1]
+		self.med1h = self._getMedium(self.hourKline)
 		self.grow1h = self._getGrow()
 	def setLimits(self):
 		"""Marca los porcentajes de limite y stop para pasarlos al Trader. El porcentaje marcado
@@ -203,15 +218,15 @@ class AT:
 		act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
 		for i in range(105,111):
 		#Comprueba si puede generar un beneficio superior al 5%
-			if (act/100)*i < self.max1h:
+			if (act/100)*i < self.medDay:
 				self.limitPrice = i
 		#if self.limitPrice == 0:
 		#	self.limitPrice = 105
 		########################################################
-		for i in range(92, 96):
+		'''for i in range(92, 96):
 		#Comprueba si puede marcar un stop menor al 8%
 			if (act/100)*i > self.min1h:
-				self.stopPrice = i
+				self.stopPrice = i'''
 		if self.stopPrice == 0:
 			self.stopPrice = 95
 	def startingAnalisys(self):
@@ -241,8 +256,10 @@ class AT:
 			self.hourKline = hourKline #kline de la ultima hora, minuto a minuto.
 			self.minDay = 0 #Precio minimo del dia
 			self.maxDay = 0 #Precio maximo del dia
+			self.medDay = 0 #Precio medio del dia
 			self.min1h = 0 #Precio minimo 1h
 			self.max1h = 0 #Precio maximo 1h
+			self.med1h = 0 #Precio medio 1h
 			self.growDay = 0 #Crecimiento (en porcentaje) del día
 			self.grow1hTOT = self._getPercentage(self.hourKline) #Crecimiento (en porcentaje) de una hora en total
 			self.grow1h = [] #Crecimiento (en porcentaje) de la ultima hora, minuto a minuto.
@@ -264,8 +281,8 @@ class AT:
 			mesARR = ["-"*60,
 					self.pair+" MONITOR v"+str(self.version),
 					str(datetime.now()),
-					"DAY min/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.maxDay:.15f}",
-					"HOUR min/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.max1h:.15f}",
+					"DAY min/med/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.medDay:.15f}"+" / "+f"{self.maxDay:.15f}",
+					"HOUR min/med/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.med1h:.15f}"+" / "+f"{self.max1h:.15f}",
 					"Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%"]
 			for line in self.grow1h[-3:]:
 				mesARR.append("--: "+str(line)+"%")
