@@ -218,7 +218,7 @@ class AT:
 		act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
 		for i in range(105,111):
 		#Comprueba si puede generar un beneficio superior al 5%
-			if (act/100)*i < self.medDay:
+			if (act/100)*i < self.med1h:
 				self.limitPrice = i
 		#if self.limitPrice == 0:
 		#	self.limitPrice = 105
@@ -236,7 +236,15 @@ class AT:
 		if self.monitor == True:
 			self.getDay()
 			self.setLimits()
-			##Esto significa que en la funcion setLimits el limite se ha detectado como superior al precio maximo.
+			'''mesARR = ["-"*60,
+					self.pair+" PRE MONITOR v"+str(self.version),
+					str(datetime.now()),
+					"DAY min/med/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.medDay:.15f}"+" / "+f"{self.maxDay:.15f}",
+					"HOUR min/med/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.med1h:.15f}"+" / "+f"{self.max1h:.15f}",
+					"Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%"]
+			for mes in mesARR:
+				print(mes)'''
+			##Esto significa que en la funcion setLimits el limite se ha detectado como superior al precio medio.
 			##En este caso se cancela el monitoreo.
 			if self.limitPrice == 0:
 				self.monitor = False
