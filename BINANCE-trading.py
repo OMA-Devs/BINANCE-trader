@@ -372,48 +372,46 @@ if __name__ == "__main__":
 	 	-argv[2] version del algoritmo o FULL. Si esta ausente, se efectuará el control de la ultima version implementada
 	'''
 	#print(sys.argv)
-	try:
-		if sys.argv[1] == "symbolMonitor":
-			t = datetime.now()
-			lap = timedelta(hours=12)
-			db.updateSymbols()
-			'''try:
-				while True:
-					if datetime.now() >= t+lap :
-						t = datetime.now()
-						db.updateSymbols()
-					else:
-						pass
-			except KeyboardInterrupt:
-				print("Symbol Monitor Manually Stopped")'''
-		elif sys.argv[1] == "buyMonitor": ##UTILIZABLE
-			t = datetime.now()
-			lap = timedelta(minutes=5)
-			buyable = getBuyablePairs()
-			buyableMonitor(buyable)
+	if sys.argv[1] == "symbolMonitor":
+		t = datetime.now()
+		lap = timedelta(hours=12)
+		db.updateSymbols()
+		'''try:
 			while True:
+				if datetime.now() >= t+lap :
+					t = datetime.now()
+					db.updateSymbols()
+				else:
+					pass
+		except KeyboardInterrupt:
+			print("Symbol Monitor Manually Stopped")'''
+	elif sys.argv[1] == "buyMonitor": ##UTILIZABLE
+		t = datetime.now()
+		lap = timedelta(minutes=5)
+		buyable = getBuyablePairs()
+		buyableMonitor(buyable)
+		while True:
+			try:
 				if datetime.now() >= t+lap:
 					t = datetime.now()
 					buyableMonitor(buyable)
-		elif sys.argv[1] == "trader":
-			if sys.argv[2] == "test":
-				pair = "BTCUSDT"
-				buy = Decimal(client.get_symbol_ticker(symbol = pair)["price"])
-				lim = 105
-				sto = 95
-				trader(pair, lim, sto, ALGO.__versions__[-1])
+			except requests.exceptions.ConnectionError:
+				print("Could not connect to API")
+	elif sys.argv[1] == "trader":
+		if sys.argv[2] == "test":
+			pair = "BTCUSDT"
+			buy = Decimal(client.get_symbol_ticker(symbol = pair)["price"])
+			lim = 105
+			sto = 95
+			trader(pair, lim, sto, ALGO.__versions__[-1])
+		else:
+			trader(sys.argv[2],int(sys.argv[3]), int(sys.argv[4]),sys.argv[5])
+	elif sys.argv[1] == "counter":
+		try:
+			if sys.argv[2] == "FULL":
+				for i in ALGO.__versions__:
+					traderCounter(i)
 			else:
-				trader(sys.argv[2],int(sys.argv[3]), int(sys.argv[4]),sys.argv[5])
-		elif sys.argv[1] == "counter":
-			try:
-				if sys.argv[2] == "FULL":
-					for i in ALGO.__versions__:
-						traderCounter(i)
-				else:
-					traderCounter(sys.argv[2])
-			except IndexError:
-				traderCounter(ALGO.__versions__[-1])
-	except IndexError:
-		print("Faltan argumentos para ejecutar el script.")
-	except requests.exceptions.ConnectionError:
-		print("Could not connect to API")
+				traderCounter(sys.argv[2])
+		except IndexError:
+			traderCounter(ALGO.__versions__[-1])
