@@ -395,8 +395,9 @@ if __name__ == "__main__":
 				if datetime.now() >= t+lap:
 					t = datetime.now()
 					buyableMonitor(buyable)
-			except requests.exceptions.ConnectionError:
+			except requests.exceptions.Timeout:
 				print("Could not connect to API")
+				pass
 	elif sys.argv[1] == "trader":
 		if sys.argv[2] == "test":
 			pair = "BTCUSDT"
