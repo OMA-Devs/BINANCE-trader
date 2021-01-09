@@ -144,20 +144,21 @@ class ALGO:
 			min3 = self.at.grow1h[-3:]
 			for ind, val in enumerate(min3):
 				try:
-					if val >= 0.5 and val < min3[ind+1]:
+					if val >= 0.4 and val < min3[ind+1]:
 						weight = weight + ((ind+1)*2)
 					else:
 						weight = weight - ((ind+1)*2)
 				except IndexError:
-					if val >= 0.5 :
+					if val >= 0.4:
 						weight = weight + ((ind+1)*2)
 					else:
 						weight = weight - ((ind+1)*2)
-			if weight >= 4:
-				#print(self.at.pair+": Cualifica")
+			if weight > 6:
+				print(self.at.pair+": Cualifica")
 				return True
 			else:
 				#print(self.at.pair+": NO Cualifica PESO: "+str(weight))
+				#print("---"+ str(min3))
 				return False
 		else:
 			#print(self.at.pair+": NO Cualifica CREC: "+ str(self.at.grow1hTOT)+"%")

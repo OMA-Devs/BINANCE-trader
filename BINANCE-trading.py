@@ -110,14 +110,14 @@ def buyableMonitor(buyable):
 	print("Comenzando Comprobacion - "+str(datetime.utcnow()))
 	if sys.argv[2] == "TEST":
 		for b in buyable:
-			kline = client.get_historical_klines(b, Client.KLINE_INTERVAL_1MINUTE, "1 hour ago UTC")
+			kline = client.get_historical_klines(b, Client.KLINE_INTERVAL_1MINUTE, "1 day ago UTC")
 			#print(kline)
 			for i in ALGO.__versions__:
 				at = AT(client,b, kline, i)
 				at.display()
 	else:
 		for b in buyable:
-			kline = client.get_historical_klines(b, Client.KLINE_INTERVAL_1MINUTE, "1 hour ago UTC")
+			kline = client.get_historical_klines(b, Client.KLINE_INTERVAL_1MINUTE, "1 day ago UTC")
 			at = AT(client,b, kline, sys.argv[2])
 			at.display()
 
@@ -152,8 +152,8 @@ class AT:
 		"""
 		##Obtiene el crecimiento de cada line en el Kline de 1 hora.
 		growARR = []
-		if len(self.hourKline) > 0:
-			for line in self.hourKline:
+		if len(self.dayKline) > 0:
+			for line in self.dayKline[-60:]:
 				op = Decimal(line[1])
 				cl = Decimal(line[4])
 				perc = round((cl-op)/op*100,3)
@@ -194,19 +194,19 @@ class AT:
 		"""[summary]
 		"""
 		##Obtenemos las Kline de las ultimas 24 horas por seguridad. 
-		dayKline = self.client.get_historical_klines(self.pair, Client.KLINE_INTERVAL_1HOUR, "1 day ago UTC")
-		MinMax = self._getMinMax(dayKline)
+		#dayKline = self.client.get_historical_klines(self.pair, Client.KLINE_INTERVAL_1HOUR, "1 day ago UTC")
+		MinMax = self._getMinMax(self.dayKline)
 		self.minDay = MinMax[0]
 		self.maxDay = MinMax[1]
-		self.medDay = self._getMedium(dayKline)
-		self.growDay = self._getPercentage(dayKline)
+		self.medDay = self._getMedium(self.dayKline)
+		self.growDay = self._getPercentage(self.dayKline)
 	def getHour(self):
 		"""[summary]
 		"""
-		MinMax = self._getMinMax(self.hourKline)
+		MinMax = self._getMinMax(self.dayKline[-60:])
 		self.min1h = MinMax[0]
 		self.max1h = MinMax[1]
-		self.med1h = self._getMedium(self.hourKline)
+		self.med1h = self._getMedium(self.dayKline[-60:])
 		self.grow1h = self._getGrow()
 	def setLimits(self):
 		"""Marca los porcentajes de limite y stop para pasarlos al Trader. El porcentaje marcado
@@ -218,7 +218,7 @@ class AT:
 		act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
 		for i in range(105,111):
 		#Comprueba si puede generar un beneficio superior al 5%
-			if (act/100)*i < self.med1h:
+			if (act/100)*i < self.maxDay and act <= (self.medDay/100)*105:
 				self.limitPrice = i
 		#if self.limitPrice == 0:
 		#	self.limitPrice = 105
@@ -234,14 +234,17 @@ class AT:
 		"""
 		self.monitor = ALGO(self, self.version).analisis()
 		if self.monitor == True:
-			self.getDay()
-			self.setLimits()
-			'''mesARR = ["-"*60,
+			'''act = Decimal(self.client.get_symbol_ticker(symbol= self.pair)["price"])
+			mesARR = ["-"*60,
 					self.pair+" PRE MONITOR v"+str(self.version),
 					str(datetime.now()),
 					"DAY min/med/max: "+ f"{self.minDay:.15f}"+" / "+f"{self.medDay:.15f}"+" / "+f"{self.maxDay:.15f}",
 					"HOUR min/med/max: "+ f"{self.min1h:.15f}"+" / "+f"{self.med1h:.15f}"+" / "+f"{self.max1h:.15f}",
-					"Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%"]
+					"Day/1h grow: "+ str(self.growDay)+"% / "+str(self.grow1hTOT)+"%",
+					"Price: "+f"{act:.15f}",
+					"Limit: "+str(self.limitPrice)+"%: "+f"{(act/100)*self.limitPrice:.15f}",
+					"Stop: "+str(self.stopPrice)+"%: "+f"{(act/100)*self.stopPrice:.15f}"
+					]
 			for mes in mesARR:
 				print(mes)'''
 			##Esto significa que en la funcion setLimits el limite se ha detectado como superior al precio medio.
@@ -249,7 +252,7 @@ class AT:
 			if self.limitPrice == 0:
 				self.monitor = False
 		#print(self.monitor)
-	def __init__(self, client, pair, hourKline, version):
+	def __init__(self, client, pair, dayKline, version):
 		"""[summary]
 
 		Args:
@@ -257,11 +260,11 @@ class AT:
 			pair ([type]): [description]
 			monitorPERC ([type]): [description]
 		"""
-		if db.getTRADINGsingle(version,pair) == False and len(hourKline) > 0:
+		if db.getTRADINGsingle(version,pair) == False and len(dayKline) > 0:
 			#print("NOT IN TRADING")
 			self.client = client
 			self.pair = pair
-			self.hourKline = hourKline #kline de la ultima hora, minuto a minuto.
+			self.dayKline = dayKline #kline de la ultima hora, minuto a minuto.
 			self.minDay = 0 #Precio minimo del dia
 			self.maxDay = 0 #Precio maximo del dia
 			self.medDay = 0 #Precio medio del dia
@@ -269,7 +272,7 @@ class AT:
 			self.max1h = 0 #Precio maximo 1h
 			self.med1h = 0 #Precio medio 1h
 			self.growDay = 0 #Crecimiento (en porcentaje) del día
-			self.grow1hTOT = self._getPercentage(self.hourKline) #Crecimiento (en porcentaje) de una hora en total
+			self.grow1hTOT = self._getPercentage(self.dayKline[-60:]) #Crecimiento (en porcentaje) de una hora en total
 			self.grow1h = [] #Crecimiento (en porcentaje) de la ultima hora, minuto a minuto.
 			self.monitorPERC = 1 #Porcentaje en el que si inician las operaciones y el monitoreo
 			self.monitor = False
@@ -278,6 +281,8 @@ class AT:
 			self.version = version
 			#self.algo = ALGO(self, self.version)
 			self.getHour()
+			self.getDay()
+			self.setLimits()
 			self.startingAnalisys()
 		else:
 			self.monitor = False
